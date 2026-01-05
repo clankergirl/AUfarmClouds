@@ -7,7 +7,7 @@ rt.player = rt.Players.LocalPlayer
 rt.coinContainer = nil
 rt.octree = Octree.new()
 rt.radius = 200 
-rt.walkspeed = 30 
+rt.walkspeed = 29 
 rt.touchedCoins = {} 
 rt.positionChangeConnections = setmetatable({}, { __mode = "v" }) 
 rt.TargetNames = {"Coin_Server", "SnowToken", "Coin"}
