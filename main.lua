@@ -6,34 +6,23 @@ rt.player = rt.Players.LocalPlayer
 
 rt.coinContainer = nil
 rt.octree = Octree.new()
-rt.Material = Enum.Material.Ice
 rt.radius = 200 
 rt.walkspeed = 30 
 rt.touchedCoins = {} 
 rt.positionChangeConnections = setmetatable({}, { __mode = "v" }) 
-rt.Added = nil
-rt.Removing = nil
-rt.MainGUI = rt.player.PlayerGui.MainGUI or rt.player.PlayerGui:WaitForChild("MainGUI")
 rt.TargetNames = {"Coin_Server", "SnowToken", "Coin"}
 
-function rt:Character () : (Model)
+function rt:Character()
     return self.player.Character or self.player.CharacterAdded:Wait()
 end
 
-function rt:Map () : (Model | nil)
+function rt:Map()
     for _, v in workspace:GetDescendants() do
         if v:IsA("Model") and v.Name == "Base" then
             return v.Parent
         end
     end
     return nil
-end
-
-function rt.Disconnect (connection:RBXScriptConnection)
-    if typeof(connection) ~= "RBXScriptConnection" then return end
-    if connection.Connected then
-        connection:Disconnect()
-    end
 end
 
 local function isCoinTouched(coin)
@@ -43,35 +32,7 @@ end
 local function markCoinAsTouched(coin)
     rt.touchedCoins[coin] = true
     local node = rt.octree:FindFirstNode(coin)
-    if node then
-        rt.octree:RemoveNode(node)
-    end
-end
-
-local function setupTouchTracking(coin)
-    local touchInterest = coin:FindFirstChildWhichIsA("TouchTransmitter")
-    if touchInterest then
-        local connection
-        connection = touchInterest.AncestryChanged:Connect(function(_, parent)
-            if parent == nil then
-                markCoinAsTouched(coin)
-                rt.Disconnect(connection)
-            end
-        end)
-        rt.positionChangeConnections[coin] = connection
-    end
-end
-
-local function setupPositionTracking(coin, LastPositonY)
-    local connection
-    connection = coin:GetPropertyChangedSignal("Position"):Connect(function()
-        if coin.Position.Y ~= LastPositonY then
-            markCoinAsTouched(coin)
-            rt.Disconnect(connection)
-            coin:Destroy()
-        end
-    end)
-    rt.positionChangeConnections[coin] = connection
+    if node then rt.octree:RemoveNode(node) end
 end
 
 local function isValidCurrency(obj)
@@ -81,35 +42,27 @@ local function isValidCurrency(obj)
     return false
 end
 
+-- This function now stays alive permanently
 local function populateOctree()
-    rt.octree:ClearAllNodes() 
+    rt.octree:ClearAllNodes()
+    rt.coinContainer = rt:Map():FindFirstChild("CoinContainer")
+    
+    if not rt.coinContainer then return end
+
     for _, descendant in pairs(rt.coinContainer:GetDescendants()) do
         if descendant:IsA("TouchTransmitter") then
             local parentCoin = descendant.Parent
             if isValidCurrency(parentCoin) and not isCoinTouched(parentCoin) then 
                 rt.octree:CreateNode(parentCoin.Position, parentCoin)
-                setupTouchTracking(parentCoin)
-                setupPositionTracking(parentCoin, parentCoin.Position.Y)
             end
         end
     end
-
-    rt.Added = rt.coinContainer.DescendantAdded:Connect(function(descendant)
-        if descendant:IsA("TouchTransmitter") then 
-            local parentCoin = descendant.Parent
-            if isValidCurrency(parentCoin) and not isCoinTouched(parentCoin) then
-                rt.octree:CreateNode(parentCoin.Position, parentCoin)
-                setupTouchTracking(parentCoin)
-                setupPositionTracking(parentCoin, parentCoin.Position.Y)
-            end
-        end
-    end)
 end
 
-local function moveToPositionSlowly(targetPosition: Vector3, duration: number)
+local function moveToPositionSlowly(targetPosition, duration)
     local char = rt:Character()
     local startTime = tick()
-    local startPos = char.PrimaryPart.Position
+    local startPos = char:GetPivot().Position
     
     while tick() - startTime < duration do
         local alpha = (tick() - startTime) / duration
@@ -120,52 +73,58 @@ local function moveToPositionSlowly(targetPosition: Vector3, duration: number)
 end
 
 local function collectCoins()
-    rt.coinContainer = rt:Map():FindFirstChild("CoinContainer")
     local sessionCoins = 0 
-    populateOctree()
-
+    
     while true do
-        local character = rt:Character()
-        local humanoid = character:WaitForChild("Humanoid")
-        local rootPart = character:WaitForChild("HumanoidRootPart")
+        -- Ensure map and container are ready
+        rt.coinContainer = rt:Map():FindFirstChild("CoinContainer")
+        if not rt.coinContainer then task.wait(1) continue end
+        
+        populateOctree()
 
-        -- Check Bag Status
-        local bagContainer = rt.MainGUI:WaitForChild("Game").CoinBags.Container
+        local char = rt:Character()
+        local humanoid = char:WaitForChild("Humanoid", 5)
+        local rootPart = char:WaitForChild("HumanoidRootPart", 5)
+
+        if not humanoid or not rootPart then task.wait(1) continue end
+
+        -- 1. Check Bag Status
+        local bagContainer = rt.player.PlayerGui:WaitForChild("MainGUI"):WaitForChild("Game").CoinBags.Container
         local tokenUI = bagContainer:FindFirstChild("SnowToken") or bagContainer:FindFirstChild("Coin")
 
         if tokenUI and tokenUI.FullBagIcon.Visible then
-            print("Bag full. Total this session: " .. sessionCoins .. ". Resetting...")
+            print("Bag full! Total: " .. sessionCoins .. ". Resetting...")
             humanoid.Health = 0
-            rt.player.CharacterAdded:Wait()
-            task.wait(3) -- Give the game time to spawn and clear UI
+            rt.player.CharacterAdded:Wait() -- Wait for respawn
+            task.wait(3) -- Safety buffer for UI to clear
             continue 
         end
 
+        -- 2. Find Nearest Coin
         local nearestNode = rt.octree:GetNearest(rootPart.Position, rt.radius, 1)[1]
         if nearestNode then
             local closestCoin = nearestNode.Object
             if not isCoinTouched(closestCoin) then
-                moveToPositionSlowly(closestCoin.Position, (rootPart.Position - closestCoin.Position).Magnitude / rt.walkspeed)
+                local dist = (rootPart.Position - closestCoin.Position).Magnitude
+                moveToPositionSlowly(closestCoin.Position, dist / rt.walkspeed)
                 markCoinAsTouched(closestCoin)
                 sessionCoins = sessionCoins + 1
                 print("Collected: " .. closestCoin.Name .. " | Total: " .. sessionCoins)
                 task.wait(0.1)
             end
         else
-            task.wait(1)
+            task.wait(1) -- No coins nearby, wait and check again
         end
     end
 end
 
--- Start the script
-local start = coroutine.create(collectCoins)
-coroutine.resume(start)
+-- Run in a thread that doesn't get destroyed on death
+task.spawn(collectCoins)
 
--- Cleanup ONLY when leaving the game
+-- ONLY cleanup when you actually leave the game
 rt.Players.PlayerRemoving:Connect(function(player)
     if player == rt.player then
-        coroutine.close(start)
-        rt.Disconnect(rt.Added)
+        print("Player left. Shutting down script.")
         rt = nil
     end
 end)
