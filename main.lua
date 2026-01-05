@@ -102,7 +102,7 @@ local function collectCoins()
 
         rt.coinContainer = map:FindFirstChild("CoinContainer")
         if not rt.coinContainer then
-            updateStatus("Searching for CoinContainer...", Color3.fromRGB(255, 150, 0))
+            updateStatus("Searching for Coins", Color3.fromRGB(255, 150, 0))
             task.wait(2)
             continue
         end
