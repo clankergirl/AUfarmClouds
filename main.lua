@@ -7,10 +7,28 @@ rt.player = rt.Players.LocalPlayer
 rt.coinContainer = nil
 rt.octree = Octree.new()
 rt.radius = 200 
-rt.walkspeed = 25 
+rt.walkspeed = 25
 rt.touchedCoins = {} 
-rt.positionChangeConnections = setmetatable({}, { __mode = "v" }) 
 rt.TargetNames = {"Coin_Server", "SnowToken", "Coin"}
+
+local screenGui = Instance.new("ScreenGui", rt.player.PlayerGui)
+screenGui.Name = "FarmStatusGui"
+screenGui.ResetOnSpawn = false
+
+local statusLabel = Instance.new("TextLabel", screenGui)
+statusLabel.Size = UDim2.new(0, 300, 0, 50)
+statusLabel.Position = UDim2.new(0.5, -150, 0.85, 0)
+statusLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.BackgroundTransparency = 0.3
+statusLabel.Font = Enum.Font.GothamBold
+statusLabel.TextSize = 18
+statusLabel.Text = "Initializing..."
+
+local function updateStatus(text, color)
+    statusLabel.Text = text
+    if color then statusLabel.TextColor3 = color end
+end
 
 function rt:Character()
     return self.player.Character or self.player.CharacterAdded:Wait()
@@ -42,7 +60,6 @@ local function isValidCurrency(obj)
     return false
 end
 
--- This function now stays alive permanently
 local function populateOctree()
     rt.octree:ClearAllNodes()
     rt.coinContainer = rt:Map():FindFirstChild("CoinContainer")
@@ -76,9 +93,19 @@ local function collectCoins()
     local sessionCoins = 0 
     
     while true do
-        -- Ensure map and container are ready
-        rt.coinContainer = rt:Map():FindFirstChild("CoinContainer")
-        if not rt.coinContainer then task.wait(1) continue end
+        local map = rt:Map()
+        if not map then
+            updateStatus("Waiting for Map...", Color3.fromRGB(255, 150, 0))
+            task.wait(2)
+            continue
+        end
+
+        rt.coinContainer = map:FindFirstChild("CoinContainer")
+        if not rt.coinContainer then
+            updateStatus("Searching for CoinContainer...", Color3.fromRGB(255, 150, 0))
+            task.wait(2)
+            continue
+        end
         
         populateOctree()
 
@@ -86,45 +113,46 @@ local function collectCoins()
         local humanoid = char:WaitForChild("Humanoid", 5)
         local rootPart = char:WaitForChild("HumanoidRootPart", 5)
 
-        if not humanoid or not rootPart then task.wait(1) continue end
+        if not humanoid or not rootPart then 
+            updateStatus("Waiting for Character...", Color3.fromRGB(255, 255, 255))
+            task.wait(1) 
+            continue 
+        end
 
-        -- 1. Check Bag Status
         local bagContainer = rt.player.PlayerGui:WaitForChild("MainGUI"):WaitForChild("Game").CoinBags.Container
         local tokenUI = bagContainer:FindFirstChild("SnowToken") or bagContainer:FindFirstChild("Coin")
 
         if tokenUI and tokenUI.FullBagIcon.Visible then
-            print("Bag full! Total: " .. sessionCoins .. ". Resetting...")
+            updateStatus("Bag is Full! Resetting...", Color3.fromRGB(255, 50, 50))
             humanoid.Health = 0
-            rt.player.CharacterAdded:Wait() -- Wait for respawn
-            task.wait(3) -- Safety buffer for UI to clear
+            rt.player.CharacterAdded:Wait()
+            task.wait(4)
             continue 
         end
 
-        -- 2. Find Nearest Coin
         local nearestNode = rt.octree:GetNearest(rootPart.Position, rt.radius, 1)[1]
         if nearestNode then
             local closestCoin = nearestNode.Object
             if not isCoinTouched(closestCoin) then
+                updateStatus("Collecting Coins (" .. sessionCoins .. ")", Color3.fromRGB(100, 255, 100))
+                
                 local dist = (rootPart.Position - closestCoin.Position).Magnitude
                 moveToPositionSlowly(closestCoin.Position, dist / rt.walkspeed)
                 markCoinAsTouched(closestCoin)
+                
                 sessionCoins = sessionCoins + 1
-                print("Collected: " .. closestCoin.Name .. " | Total: " .. sessionCoins)
                 task.wait(0.1)
             end
         else
-            task.wait(1) -- No coins nearby, wait and check again
+            updateStatus("Scanning for Coins...", Color3.fromRGB(200, 200, 255))
+            task.wait(1)
         end
     end
 end
 
--- Run in a thread that doesn't get destroyed on death
 task.spawn(collectCoins)
 
--- ONLY cleanup when you actually leave the game
-rt.Players.PlayerRemoving:Connect(function(player)
-    if player == rt.player then
-        print("Player left. Shutting down script.")
-        rt = nil
-    end
+-- Cleanup on Leave
+rt.Players.PlayerRemoving:Connect(function(p)
+    if p == rt.player then screenGui:Destroy() end
 end)
