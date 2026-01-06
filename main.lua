@@ -123,8 +123,8 @@ local function start()
             lastContainer = currentContainer
             rt.touchedCoins = {}
             if currentContainer ~= nil then
-                for i = 9, 1, -1 do
-                    updateStatus("ROUND START: Waiting " .. i .. "s...", Color3.fromRGB(255, 165, 0))
+                for i = 6, 1, -1 do
+                    updateStatus("ROUND STARTING: Waiting " .. i .. "s...", Color3.fromRGB(255, 165, 0))
                     task.wait(1)
                 end
             end
@@ -144,7 +144,7 @@ local function start()
         if nearest then
             local coin = nearest.Object
             if coin and coin.Parent and not rt.touchedCoins[coin] then
-                updateStatus("Collecting: " .. sessionCoins, Color3.fromRGB(100, 255, 100))
+                updateStatus("Collecting Coins", Color3.fromRGB(100, 255, 100))
                 local result = moveToCoin(coin.Position)
                 
                 if result == "SUCCESS" then
@@ -153,7 +153,7 @@ local function start()
                 end
             end
         else
-            updateStatus("Scanning Radius (300)...", Color3.fromRGB(150, 200, 255))
+            updateStatus("Waiting for round to start.", Color3.fromRGB(150, 200, 255))
             task.wait(0.5)
         end
     end
