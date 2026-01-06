@@ -1,5 +1,4 @@
--- Restored Classic Version (Upright Movement)
--- Optimized for Android 10 (4 Cores / 2GB RAM)
+-- Updated by clankergirl
 local Octree = loadstring(game:HttpGet("https://raw.githubusercontent.com/Sleitnick/rbxts-octo-tree/main/src/init.lua", true))()
 local rt = {
     Players = game:GetService("Players"),
@@ -7,7 +6,7 @@ local rt = {
     octree = Octree.new(),
     touchedCoins = {},
     TargetNames = {Coin_Server = true, SnowToken = true, Coin = true},
-    walkspeed = 30,
+    walkspeed = 25,
     radius = 500
 }
 rt.player = rt.Players.LocalPlayer
