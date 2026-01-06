@@ -10,7 +10,7 @@ local rt = {
     TargetNames = {Coin_Server = true, SnowToken = true, Coin = true},
     walkspeed = 25,
     radius = 300,
-    depth = 4.5 -- How far underground you stay
+    depth = 4
 }
 rt.player = rt.Players.LocalPlayer
 local lastContainer = nil 
@@ -128,7 +128,7 @@ local function start()
             lastContainer = container
             rt.touchedCoins = {}
             if container ~= nil then
-                for i = 9, 1, -1 do
+                for i = 3, 1, -1 do
                     updateStatus("ROUND START: Waiting " .. i .. "s...", Color3.fromRGB(255, 165, 0))
                     task.wait(1)
                 end
