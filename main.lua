@@ -3,50 +3,36 @@ local Octree = loadstring(game:HttpGet("https://raw.githubusercontent.com/Sleitn
 local rt = {} 
 rt.Players = game:GetService("Players")
 rt.player = rt.Players.LocalPlayer
-rt.RunService = game:GetService("RunService")
 
 rt.coinContainer = nil
 rt.octree = Octree.new()
 rt.radius = 200 
 rt.walkspeed = 25
-rt.undergroundDepth = 4 
+rt.undergroundDepth = 4
 rt.touchedCoins = {} 
 rt.TargetNames = {"Coin_Server", "SnowToken", "Coin"}
 
--- UI SETUP
+-- UI SETUP (Kept from previous version)
 local screenGui = Instance.new("ScreenGui", rt.player.PlayerGui)
 screenGui.Name = "FarmStatusGui"
 screenGui.ResetOnSpawn = false
 
 local statusLabel = Instance.new("TextLabel", screenGui)
-statusLabel.Size = UDim2.new(0, 350, 0, 50)
-statusLabel.Position = UDim2.new(0.5, -175, 0.85, 0)
-statusLabel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+statusLabel.Size = UDim2.new(0, 300, 0, 50)
+statusLabel.Position = UDim2.new(0.5, -150, 0.85, 0)
+statusLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-statusLabel.BackgroundTransparency = 0.2
+statusLabel.BackgroundTransparency = 0.3
 statusLabel.Font = Enum.Font.GothamBold
-statusLabel.TextSize = 16
-statusLabel.Text = "Ghost Mode Initializing..."
+statusLabel.TextSize = 18
+statusLabel.Text = "Initializing Underground Mode..."
 
 local function updateStatus(text, color)
     statusLabel.Text = text
     if color then statusLabel.TextColor3 = color end
 end
 
--- NOCLIP HANDLER
--- This runs every frame to ensure collisions stay disabled
-rt.RunService.Stepped:Connect(function()
-    local char = rt.player.Character
-    if char then
-        for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
-            end
-        end
-    end
-end)
-
--- HELPER FUNCTIONS
+-- HELPER FUNCTIONS --
 function rt:Character()
     return self.player.Character or self.player.CharacterAdded:Wait()
 end
@@ -91,24 +77,30 @@ local function populateOctree()
     end
 end
 
+-- NEW: UNDERGROUND LERP FUNCTION --
 local function moveToPositionSlowly(targetPosition, duration)
     local char = rt:Character()
     local startTime = tick()
     local startPos = char:GetPivot().Position
+    
+    -- This rotation makes the character lay flat
     local horizontalRotation = CFrame.Angles(math.rad(90), 0, 0)
 
     while tick() - startTime < duration do
         local alpha = (tick() - startTime) / duration
         local currentPos = startPos:Lerp(targetPosition, alpha)
         
-        -- Depth + Rotation + Noclip position
+        -- Apply the underground offset and the rotation
         local finalCFrame = CFrame.new(currentPos - Vector3.new(0, rt.undergroundDepth, 0)) * horizontalRotation
+        
         char:PivotTo(finalCFrame)
         task.wait()
     end
+    -- Final snap to position
+    char:PivotTo(CFrame.new(targetPosition - Vector3.new(0, rt.undergroundDepth, 0)) * horizontalRotation)
 end
 
--- MAIN LOOP
+-- MAIN LOOP --
 local function collectCoins()
     local sessionCoins = 0 
     
@@ -134,7 +126,7 @@ local function collectCoins()
         local rootPart = char:WaitForChild("HumanoidRootPart", 5)
 
         if not humanoid or not rootPart then 
-            updateStatus("Respawning...", Color3.fromRGB(255, 255, 255))
+            updateStatus("Waiting for Character...", Color3.fromRGB(255, 255, 255))
             task.wait(1) 
             continue 
         end
@@ -144,7 +136,7 @@ local function collectCoins()
         local tokenUI = bagContainer:FindFirstChild("SnowToken") or bagContainer:FindFirstChild("Coin")
 
         if tokenUI and tokenUI.FullBagIcon.Visible then
-            updateStatus("Bag Full! Resetting Character...", Color3.fromRGB(255, 50, 50))
+            updateStatus("Bag Full! Resetting...", Color3.fromRGB(255, 50, 50))
             humanoid.Health = 0
             rt.player.CharacterAdded:Wait()
             task.wait(4)
@@ -156,7 +148,7 @@ local function collectCoins()
         if nearestNode then
             local closestCoin = nearestNode.Object
             if not isCoinTouched(closestCoin) then
-                updateStatus("Ghost Farming (Total: " .. sessionCoins .. ")", Color3.fromRGB(150, 255, 255))
+                updateStatus("Underground Farm (" .. sessionCoins .. ")", Color3.fromRGB(100, 255, 255))
                 
                 local dist = (rootPart.Position - closestCoin.Position).Magnitude
                 moveToPositionSlowly(closestCoin.Position, dist / rt.walkspeed)
@@ -166,7 +158,7 @@ local function collectCoins()
                 task.wait(0.1)
             end
         else
-            updateStatus("All coins collected! Waiting for respawn...", Color3.fromRGB(200, 200, 255))
+            updateStatus("Scanning for Coins...", Color3.fromRGB(200, 200, 255))
             task.wait(1)
         end
     end
