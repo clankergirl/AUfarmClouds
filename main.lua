@@ -123,7 +123,7 @@ local function start()
             lastContainer = currentContainer
             rt.touchedCoins = {}
             if currentContainer ~= nil then
-                for i = 6, 1, -1 do
+                for i = 3, 1, -1 do
                     updateStatus("ROUND STARTING: Waiting " .. i .. "s...", Color3.fromRGB(255, 165, 0))
                     task.wait(1)
                 end
