@@ -7,12 +7,11 @@ local rt = {
     octree = Octree.new(),
     touchedCoins = {},
     TargetNames = {Coin_Server = true, SnowToken = true, Coin = true},
-    walkspeed = 26,
+    walkspeed = 25,
     radius = 300
 }
 rt.player = rt.Players.LocalPlayer
 
--- PERSISTENT CENTERED UI SETUP --
 local screenGui = rt.player.PlayerGui:FindFirstChild("ClassicFarmUI")
 if screenGui then screenGui:Destroy() end
 
@@ -29,15 +28,13 @@ label.TextStrokeTransparency = 0
 label.TextStrokeColor3 = Color3.new(0,0,0)
 label.Font = Enum.Font.GothamBold
 label.TextSize = 24
-label.Text = "Initializing Anti-AFK Farm..."
+label.Text = "Initializing Safety Farm..."
 
--- COLORFUL STATUS UPDATER --
 local function updateStatus(text, color)
     label.Text = text
     label.TextColor3 = color or Color3.new(1, 1, 1)
 end
 
--- NEW: ANTI-AFK LOGIC --
 rt.player.Idled:Connect(function()
     rt.VirtualUser:CaptureController()
     rt.VirtualUser:ClickButton2(Vector2.new())
@@ -45,7 +42,6 @@ rt.player.Idled:Connect(function()
     task.wait(2)
 end)
 
--- HELPER: Find Map & Container
 local function getContainer()
     for _, v in ipairs(workspace:GetDescendants()) do
         if v.Name == "CoinContainer" then return v end
@@ -53,7 +49,6 @@ local function getContainer()
     return nil
 end
 
--- MOVEMENT: Standard Upright Lerp
 local function moveToCoin(targetPos)
     local char = rt.player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -65,18 +60,21 @@ local function moveToCoin(targetPos)
     local startTick = tick()
 
     while tick() - startTick < duration do
+        if root.Position.Y < -50 then 
+            return "FELL" 
+        end
+        
         local alpha = (tick() - startTick) / duration
         char:PivotTo(CFrame.new(startPos:Lerp(targetPos, alpha)))
         rt.RunService.Heartbeat:Wait()
     end
     char:PivotTo(CFrame.new(targetPos))
+    return "SUCCESS"
 end
 
--- IMPROVED BAG CHECK
 local function isBagFull()
     local mainGui = rt.player.PlayerGui:FindFirstChild("MainGUI")
     if not mainGui then return false end
-    
     local gameUI = mainGui:FindFirstChild("Game")
     if gameUI then
         local coinBags = gameUI:FindFirstChild("CoinBags")
@@ -91,7 +89,6 @@ local function isBagFull()
     return false
 end
 
--- MAIN LOOP
 local function start()
     local sessionCoins = 0
     
@@ -106,36 +103,53 @@ local function start()
             continue 
         end
 
-        -- BAG CHECK
+        if root.Position.Y < -50 then
+            updateStatus("Fell Off Map! Resetting...", Color3.fromRGB(255, 100, 0))
+            hum.Health = 0
+            rt.player.CharacterAdded:Wait()
+            task.wait(5)
+            continue
+        end
+
         if isBagFull() then
             updateStatus("BAG FULL! RESETTING...", Color3.fromRGB(255, 50, 50))
             hum.Health = 0
-            
             rt.player.CharacterRemoving:Wait()
             rt.player.CharacterAdded:Wait()
             task.wait(4)
             continue
         end
 
-        -- Refresh Octree
         local container = getContainer()
         if container then
             rt.octree:ClearAllNodes()
+            local count = 0
             for _, v in ipairs(container:GetDescendants()) do
-                if rt.TargetNames[v.Name] and not rt.touchedCoins[v] then
+                if rt.TargetNames[v.Name] and v:IsA("BasePart") and v.Parent ~= nil and not rt.touchedCoins[v] then
                     rt.octree:CreateNode(v.Position, v)
+                    count = count + 1
                 end
+            end
+            
+            if count == 0 then
+                updateStatus("Waiting for Round/Coins...", Color3.fromRGB(255, 200, 0))
+                task.wait(2)
+                continue
             end
         end
 
-        -- Find Nearest
         local nearest = rt.octree:GetNearest(root.Position, rt.radius, 1)[1]
         if nearest then
-            updateStatus("Collecting: " .. sessionCoins, Color3.fromRGB(100, 255, 100))
-            moveToCoin(nearest.Object.Position)
-            
-            rt.touchedCoins[nearest.Object] = true
-            sessionCoins = sessionCoins + 1
+            local coin = nearest.Object
+            if coin and coin.Parent ~= nil then
+                updateStatus("Collecting: " .. sessionCoins, Color3.fromRGB(100, 255, 100))
+                local result = moveToCoin(coin.Position)
+                
+                if result == "SUCCESS" then
+                    rt.touchedCoins[coin] = true
+                    sessionCoins = sessionCoins + 1
+                end
+            end
         else
             updateStatus("Scanning for Coins...", Color3.fromRGB(150, 200, 255))
             task.wait(1)
