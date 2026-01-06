@@ -7,7 +7,7 @@ local rt = {
     touchedCoins = {},
     TargetNames = {Coin_Server = true, SnowToken = true, Coin = true},
     walkspeed = 25,
-    radius = 500
+    radius = 300
 }
 rt.player = rt.Players.LocalPlayer
 
@@ -49,6 +49,27 @@ local function moveToCoin(targetPos)
     char:PivotTo(CFrame.new(targetPos))
 end
 
+-- IMPROVED BAG CHECK
+local function isBagFull()
+    local mainGui = rt.player.PlayerGui:FindFirstChild("MainGUI")
+    if not mainGui then return false end
+    
+    -- We are looking for the specific "Full" indicator in the Game UI
+    local gameUI = mainGui:FindFirstChild("Game")
+    if gameUI then
+        local coinBags = gameUI:FindFirstChild("CoinBags")
+        if coinBags then
+            -- This looks through all bag types (SnowToken, Coin, etc.)
+            for _, bag in ipairs(coinBags:GetDescendants()) do
+                if bag.Name == "FullBagIcon" and bag.Visible == true then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
 -- MAIN LOOP
 local function start()
     local sessionCoins = 0
@@ -64,14 +85,15 @@ local function start()
             continue 
         end
 
-        -- Bag Check
-        local gui = rt.player.PlayerGui:FindFirstChild("MainGUI", true)
-        local fullIcon = gui and gui:FindFirstChild("FullBagIcon", true)
-        if fullIcon and fullIcon.Visible then
+        -- BAG CHECK (Now uses the improved function)
+        if isBagFull() then
             label.Text = "Bag Full! Resetting..."
             hum.Health = 0
+            
+            -- Important: Wait for the character to actually be gone and respawned
+            rt.player.CharacterRemoving:Wait()
             rt.player.CharacterAdded:Wait()
-            task.wait(4)
+            task.wait(4) -- Extra time for Android to load the new UI state
             continue
         end
 
@@ -89,13 +111,13 @@ local function start()
         -- Find Nearest
         local nearest = rt.octree:GetNearest(root.Position, rt.radius, 1)[1]
         if nearest then
-            label.Text = "Collecting Coins: " .. sessionCoins
+            label.Text = "Collecting: " .. sessionCoins
             moveToCoin(nearest.Object.Position)
             
             rt.touchedCoins[nearest.Object] = true
             sessionCoins = sessionCoins + 1
         else
-            label.Text = "Scanning for Coins..."
+            label.Text = "Searching for Coins..."
             task.wait(1)
         end
     end
