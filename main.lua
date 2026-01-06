@@ -1,4 +1,5 @@
--- Optimized for Android 10 (High Compatibility)
+-- Restored Classic Version (Upright Movement)
+-- Optimized for Android 10 (4 Cores / 2GB RAM)
 local Octree = loadstring(game:HttpGet("https://raw.githubusercontent.com/Sleitnick/rbxts-octo-tree/main/src/init.lua", true))()
 local rt = {
     Players = game:GetService("Players"),
@@ -6,103 +7,97 @@ local rt = {
     octree = Octree.new(),
     touchedCoins = {},
     TargetNames = {Coin_Server = true, SnowToken = true, Coin = true},
-    walkspeed = 25,
-    radius = 300,=
-    depth = 4
+    walkspeed = 30,
+    radius = 500
 }
 rt.player = rt.Players.LocalPlayer
 
+-- LITE STATUS UI
 local screenGui = Instance.new("ScreenGui", rt.player.PlayerGui)
-screenGui.Name = "DebugUI"
+screenGui.Name = "ClassicFarmUI"
 local label = Instance.new("TextLabel", screenGui)
-label.Size = UDim2.new(0, 300, 0, 50)
-label.Position = UDim2.new(0.5, -150, 0.1, 0)
+label.Size = UDim2.new(0, 250, 0, 40)
+label.Position = UDim2.new(0.5, -125, 0.85, 0)
 label.BackgroundColor3 = Color3.new(0,0,0)
 label.TextColor3 = Color3.new(1,1,1)
-label.Text = "Script Started - Searching..."
+label.BackgroundTransparency = 0.4
+label.Text = "Initializing Classic Farm..."
 
-local function updateStatus(txt) label.Text = txt end
-
-rt.RunService.Stepped:Connect(function()
-    local char = rt.player.Character
-    if char then
-        for _, v in ipairs(char:GetChildren()) do
-            if v:IsA("BasePart") then v.CanCollide = false end
-        end
+-- HELPER: Find Map & Container
+local function getContainer()
+    for _, v in ipairs(workspace:GetDescendants()) do
+        if v.Name == "CoinContainer" then return v end
     end
-end)
+    return nil
+end
 
-local function moveGhost(targetPos)
+-- MOVEMENT: Standard Upright Lerp
+local function moveToCoin(targetPos)
     local char = rt.player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root then return end
 
-    local goalPos = targetPos - Vector3.new(0, rt.depth, 0)
-    root.Anchored = true
-    
     local startPos = root.Position
-    local dist = (startPos - goalPos).Magnitude
+    local dist = (startPos - targetPos).Magnitude
     local duration = dist / rt.walkspeed
     local startTick = tick()
 
     while tick() - startTick < duration do
         local alpha = (tick() - startTick) / duration
-        char:PivotTo(CFrame.new(startPos:Lerp(goalPos, alpha)) * CFrame.Angles(math.rad(90), 0, 0))
+        char:PivotTo(CFrame.new(startPos:Lerp(targetPos, alpha)))
         rt.RunService.Heartbeat:Wait()
     end
-    
     char:PivotTo(CFrame.new(targetPos))
-    task.wait(0.1)
-    root.Anchored = false
 end
 
+-- MAIN LOOP
 local function start()
+    local sessionCoins = 0
+    
     while true do
-        task.wait(0.5)
-        
+        task.wait(0.2)
         local char = rt.player.Character
         local root = char and char:FindFirstChild("HumanoidRootPart")
-        if not root then 
-            updateStatus("Waiting for Character...")
+        local hum = char and char:FindFirstChild("Humanoid")
+
+        if not root or not hum then 
+            label.Text = "Waiting for Character..."
             continue 
         end
 
-        local bag = rt.player.PlayerGui:FindFirstChild("MainGUI", true)
-        local full = bag and bag:FindFirstChild("FullBagIcon", true)
-        if full and full.Visible then
-            updateStatus("Bag Full - Resetting")
-            char.Humanoid.Health = 0
+        -- Bag Check
+        local gui = rt.player.PlayerGui:FindFirstChild("MainGUI", true)
+        local fullIcon = gui and gui:FindFirstChild("FullBagIcon", true)
+        if fullIcon and fullIcon.Visible then
+            label.Text = "Bag Full! Resetting..."
+            hum.Health = 0
             rt.player.CharacterAdded:Wait()
-            task.wait(3)
+            task.wait(4)
             continue
         end
 
-        rt.octree:ClearAllNodes()
-        local coinsFound = 0
-        
-        for _, container in ipairs(workspace:GetDescendants()) do
-            if container.Name == "CoinContainer" then
-                for _, coin in ipairs(container:GetDescendants()) do
-                    if rt.TargetNames[coin.Name] and not rt.touchedCoins[coin] then
-                        rt.octree:CreateNode(coin.Position, coin)
-                        coinsFound = coinsFound + 1
-                    end
+        -- Refresh Octree
+        local container = getContainer()
+        if container then
+            rt.octree:ClearAllNodes()
+            for _, v in ipairs(container:GetDescendants()) do
+                if rt.TargetNames[v.Name] and not rt.touchedCoins[v] then
+                    rt.octree:CreateNode(v.Position, v)
                 end
             end
         end
 
-        if coinsFound == 0 then
-            updateStatus("No Coins Found on Map")
-            continue
-        end
-
+        -- Find Nearest
         local nearest = rt.octree:GetNearest(root.Position, rt.radius, 1)[1]
         if nearest then
-            updateStatus("Moving to Coin...")
-            moveGhost(nearest.Object.Position)
+            label.Text = "Collecting Coins: " .. sessionCoins
+            moveToCoin(nearest.Object.Position)
+            
             rt.touchedCoins[nearest.Object] = true
+            sessionCoins = sessionCoins + 1
         else
-            updateStatus("Coins exist but none in radius")
+            label.Text = "Scanning for Coins..."
+            task.wait(1)
         end
     end
 end
