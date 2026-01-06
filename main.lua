@@ -11,16 +11,30 @@ local rt = {
 }
 rt.player = rt.Players.LocalPlayer
 
--- LITE STATUS UI
-local screenGui = Instance.new("ScreenGui", rt.player.PlayerGui)
+-- PERSISTENT CENTERED UI SETUP --
+local screenGui = rt.player.PlayerGui:FindFirstChild("ClassicFarmUI")
+if screenGui then screenGui:Destroy() end
+
+screenGui = Instance.new("ScreenGui", rt.player.PlayerGui)
 screenGui.Name = "ClassicFarmUI"
+screenGui.ResetOnSpawn = false -- This prevents the UI from disappearing on reset
+
 local label = Instance.new("TextLabel", screenGui)
-label.Size = UDim2.new(0, 250, 0, 40)
-label.Position = UDim2.new(0.5, -125, 0.85, 0)
-label.BackgroundColor3 = Color3.new(0,0,0)
-label.TextColor3 = Color3.new(1,1,1)
-label.BackgroundTransparency = 0.4
-label.Text = "Initializing Classic Farm..."
+label.Size = UDim2.new(0, 400, 0, 60)
+label.Position = UDim2.new(0.5, -200, 0.5, -30) -- Exactly in the middle of the screen
+label.BackgroundTransparency = 1 -- Fully transparent background for a cleaner look
+label.TextColor3 = Color3.fromRGB(255, 255, 255)
+label.TextStrokeTransparency = 0 -- Adds a black outline to make letters pop
+label.TextStrokeColor3 = Color3.new(0,0,0)
+label.Font = Enum.Font.GothamBold
+label.TextSize = 24
+label.Text = "Initializing..."
+
+-- COLORFUL STATUS UPDATER --
+local function updateStatus(text, color)
+    label.Text = text
+    label.TextColor3 = color or Color3.new(1, 1, 1)
+end
 
 -- HELPER: Find Map & Container
 local function getContainer()
@@ -54,12 +68,10 @@ local function isBagFull()
     local mainGui = rt.player.PlayerGui:FindFirstChild("MainGUI")
     if not mainGui then return false end
     
-    -- We are looking for the specific "Full" indicator in the Game UI
     local gameUI = mainGui:FindFirstChild("Game")
     if gameUI then
         local coinBags = gameUI:FindFirstChild("CoinBags")
         if coinBags then
-            -- This looks through all bag types (SnowToken, Coin, etc.)
             for _, bag in ipairs(coinBags:GetDescendants()) do
                 if bag.Name == "FullBagIcon" and bag.Visible == true then
                     return true
@@ -81,19 +93,18 @@ local function start()
         local hum = char and char:FindFirstChild("Humanoid")
 
         if not root or not hum then 
-            label.Text = "Waiting for Character..."
+            updateStatus("Waiting for Character...", Color3.fromRGB(255, 255, 255))
             continue 
         end
 
-        -- BAG CHECK (Now uses the improved function)
+        -- BAG CHECK
         if isBagFull() then
-            label.Text = "Bag Full! Resetting..."
+            updateStatus("BAG FULL! RESETTING...", Color3.fromRGB(255, 50, 50)) -- Bright Red
             hum.Health = 0
             
-            -- Important: Wait for the character to actually be gone and respawned
             rt.player.CharacterRemoving:Wait()
             rt.player.CharacterAdded:Wait()
-            task.wait(4) -- Extra time for Android to load the new UI state
+            task.wait(4)
             continue
         end
 
@@ -111,13 +122,13 @@ local function start()
         -- Find Nearest
         local nearest = rt.octree:GetNearest(root.Position, rt.radius, 1)[1]
         if nearest then
-            label.Text = "Collecting: " .. sessionCoins
+            updateStatus("Collecting: " .. sessionCoins, Color3.fromRGB(100, 255, 100)) -- Bright Green
             moveToCoin(nearest.Object.Position)
             
             rt.touchedCoins[nearest.Object] = true
             sessionCoins = sessionCoins + 1
         else
-            label.Text = "Searching for Coins..."
+            updateStatus("Scanning for Coins...", Color3.fromRGB(150, 200, 255)) -- Soft Blue
             task.wait(1)
         end
     end
