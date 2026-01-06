@@ -11,6 +11,7 @@ local rt = {
     radius = 300
 }
 rt.player = rt.Players.LocalPlayer
+local lastContainer = nil 
 
 local screenGui = rt.player.PlayerGui:FindFirstChild("ClassicFarmUI")
 if screenGui then screenGui:Destroy() end
@@ -28,7 +29,7 @@ label.TextStrokeTransparency = 0
 label.TextStrokeColor3 = Color3.new(0,0,0)
 label.Font = Enum.Font.GothamBold
 label.TextSize = 24
-label.Text = "Initializing Safety Farm..."
+label.Text = "Initializing High-Accuracy Farm..."
 
 local function updateStatus(text, color)
     label.Text = text
@@ -60,10 +61,7 @@ local function moveToCoin(targetPos)
     local startTick = tick()
 
     while tick() - startTick < duration do
-        if root.Position.Y < -50 then 
-            return "FELL" 
-        end
-        
+        if root.Position.Y < -50 then return "FELL" end
         local alpha = (tick() - startTick) / duration
         char:PivotTo(CFrame.new(startPos:Lerp(targetPos, alpha)))
         rt.RunService.Heartbeat:Wait()
@@ -93,7 +91,7 @@ local function start()
     local sessionCoins = 0
     
     while true do
-        task.wait(0.2)
+        task.wait(0.1)
         local char = rt.player.Character
         local root = char and char:FindFirstChild("HumanoidRootPart")
         local hum = char and char:FindFirstChild("Humanoid")
@@ -120,28 +118,32 @@ local function start()
             continue
         end
 
-        local container = getContainer()
-        if container then
-            rt.octree:ClearAllNodes()
-            local count = 0
-            for _, v in ipairs(container:GetDescendants()) do
-                if rt.TargetNames[v.Name] and v:IsA("BasePart") and v.Parent ~= nil and not rt.touchedCoins[v] then
-                    rt.octree:CreateNode(v.Position, v)
-                    count = count + 1
+        local currentContainer = getContainer()
+        if currentContainer ~= lastContainer then
+            lastContainer = currentContainer
+            rt.touchedCoins = {}
+            if currentContainer ~= nil then
+                for i = 9, 1, -1 do
+                    updateStatus("ROUND START: Waiting " .. i .. "s...", Color3.fromRGB(255, 165, 0))
+                    task.wait(1)
                 end
             end
-            
-            if count == 0 then
-                updateStatus("Waiting for Round/Coins...", Color3.fromRGB(255, 200, 0))
-                task.wait(2)
-                continue
+        end
+
+        if currentContainer then
+            rt.octree:ClearAllNodes()
+            for _, v in ipairs(currentContainer:GetDescendants()) do
+                if rt.TargetNames[v.Name] and v:IsA("BasePart") and v.Parent ~= nil and not rt.touchedCoins[v] then
+                    rt.octree:CreateNode(v.Position, v)
+                end
             end
         end
 
         local nearest = rt.octree:GetNearest(root.Position, rt.radius, 1)[1]
+        
         if nearest then
             local coin = nearest.Object
-            if coin and coin.Parent ~= nil then
+            if coin and coin.Parent and not rt.touchedCoins[coin] then
                 updateStatus("Collecting: " .. sessionCoins, Color3.fromRGB(100, 255, 100))
                 local result = moveToCoin(coin.Position)
                 
@@ -151,8 +153,8 @@ local function start()
                 end
             end
         else
-            updateStatus("Scanning for Coins...", Color3.fromRGB(150, 200, 255))
-            task.wait(1)
+            updateStatus("Scanning Radius (300)...", Color3.fromRGB(150, 200, 255))
+            task.wait(0.5)
         end
     end
 end
