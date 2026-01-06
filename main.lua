@@ -1,12 +1,13 @@
--- Updated by clankergirl
+-- AUCloudFarms Private Script, if you have found this contact "clankergirl" on discord to claim your reward.
 local Octree = loadstring(game:HttpGet("https://raw.githubusercontent.com/Sleitnick/rbxts-octo-tree/main/src/init.lua", true))()
 local rt = {
     Players = game:GetService("Players"),
     RunService = game:GetService("RunService"),
+    VirtualUser = game:GetService("VirtualUser"),
     octree = Octree.new(),
     touchedCoins = {},
     TargetNames = {Coin_Server = true, SnowToken = true, Coin = true},
-    walkspeed = 25,
+    walkspeed = 26,
     radius = 300
 }
 rt.player = rt.Players.LocalPlayer
@@ -17,24 +18,32 @@ if screenGui then screenGui:Destroy() end
 
 screenGui = Instance.new("ScreenGui", rt.player.PlayerGui)
 screenGui.Name = "ClassicFarmUI"
-screenGui.ResetOnSpawn = false -- This prevents the UI from disappearing on reset
+screenGui.ResetOnSpawn = false 
 
 local label = Instance.new("TextLabel", screenGui)
 label.Size = UDim2.new(0, 400, 0, 60)
-label.Position = UDim2.new(0.5, -200, 0.5, -30) -- Exactly in the middle of the screen
-label.BackgroundTransparency = 1 -- Fully transparent background for a cleaner look
+label.Position = UDim2.new(0.5, -200, 0.5, -30) 
+label.BackgroundTransparency = 1 
 label.TextColor3 = Color3.fromRGB(255, 255, 255)
-label.TextStrokeTransparency = 0 -- Adds a black outline to make letters pop
+label.TextStrokeTransparency = 0 
 label.TextStrokeColor3 = Color3.new(0,0,0)
 label.Font = Enum.Font.GothamBold
 label.TextSize = 24
-label.Text = "Initializing..."
+label.Text = "Initializing Anti-AFK Farm..."
 
 -- COLORFUL STATUS UPDATER --
 local function updateStatus(text, color)
     label.Text = text
     label.TextColor3 = color or Color3.new(1, 1, 1)
 end
+
+-- NEW: ANTI-AFK LOGIC --
+rt.player.Idled:Connect(function()
+    rt.VirtualUser:CaptureController()
+    rt.VirtualUser:ClickButton2(Vector2.new())
+    updateStatus("Anti-AFK Triggered!", Color3.fromRGB(255, 200, 0))
+    task.wait(2)
+end)
 
 -- HELPER: Find Map & Container
 local function getContainer()
@@ -99,7 +108,7 @@ local function start()
 
         -- BAG CHECK
         if isBagFull() then
-            updateStatus("BAG FULL! RESETTING...", Color3.fromRGB(255, 50, 50)) -- Bright Red
+            updateStatus("BAG FULL! RESETTING...", Color3.fromRGB(255, 50, 50))
             hum.Health = 0
             
             rt.player.CharacterRemoving:Wait()
@@ -122,13 +131,13 @@ local function start()
         -- Find Nearest
         local nearest = rt.octree:GetNearest(root.Position, rt.radius, 1)[1]
         if nearest then
-            updateStatus("Collecting: " .. sessionCoins, Color3.fromRGB(100, 255, 100)) -- Bright Green
+            updateStatus("Collecting: " .. sessionCoins, Color3.fromRGB(100, 255, 100))
             moveToCoin(nearest.Object.Position)
             
             rt.touchedCoins[nearest.Object] = true
             sessionCoins = sessionCoins + 1
         else
-            updateStatus("Scanning for Coins...", Color3.fromRGB(150, 200, 255)) -- Soft Blue
+            updateStatus("Scanning for Coins...", Color3.fromRGB(150, 200, 255))
             task.wait(1)
         end
     end
