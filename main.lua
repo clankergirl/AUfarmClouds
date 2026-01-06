@@ -6,8 +6,8 @@ local rt = {
     octree = Octree.new(),
     touchedCoins = {},
     TargetNames = {Coin_Server = true, SnowToken = true, Coin = true},
-    walkspeed = 28, -- Slightly faster for mobile
-    radius = 500,
+    walkspeed = 25,
+    radius = 300,
     depth = 4.0
 }
 rt.player = rt.Players.LocalPlayer
