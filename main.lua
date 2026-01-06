@@ -1,167 +1,123 @@
 -- Updated by clankergirl
 local Octree = loadstring(game:HttpGet("https://raw.githubusercontent.com/Sleitnick/rbxts-octo-tree/main/src/init.lua", true))()
-local rt = {} 
-rt.Players = game:GetService("Players")
+local rt = {
+    Players = game:GetService("Players"),
+    RunService = game:GetService("RunService"),
+    octree = Octree.new(),
+    touchedCoins = {},
+    TargetNames = {Coin_Server = true, SnowToken = true, Coin = true},
+    walkspeed = 25,
+    radius = 300,
+    depth = 4
+}
 rt.player = rt.Players.LocalPlayer
 
-rt.coinContainer = nil
-rt.octree = Octree.new()
-rt.radius = 200 
-rt.walkspeed = 25
-rt.undergroundDepth = 4
-rt.touchedCoins = {} 
-rt.TargetNames = {"Coin_Server", "SnowToken", "Coin"}
+-- NOCLIP & CACHE
+local charParts = {}
+local function updateCache(char)
+    charParts = {}
+    for _, p in ipairs(char:GetDescendants()) do
+        if p:IsA("BasePart") then table.insert(charParts, p) end
+    end
+end
+rt.player.CharacterAdded:Connect(updateCache)
+if rt.player.Character then updateCache(rt.player.Character) end
 
--- UI SETUP (Kept from previous version)
+-- Frame-stable Noclip
+rt.RunService.Stepped:Connect(function()
+    for i = 1, #charParts do charParts[i].CanCollide = false end
+end)
+
+-- LITE UI
 local screenGui = Instance.new("ScreenGui", rt.player.PlayerGui)
-screenGui.Name = "FarmStatusGui"
-screenGui.ResetOnSpawn = false
+screenGui.Name = "AndroidLiteUI"
+local label = Instance.new("TextLabel", screenGui)
+label.Size = UDim2.new(0, 220, 0, 35)
+label.Position = UDim2.new(0.5, -110, 0.05, 0)
+label.BackgroundColor3 = Color3.new(0,0,0)
+label.BackgroundTransparency = 0.6
+label.TextColor3 = Color3.new(1,1,1)
+label.TextSize = 14
+label.Font = Enum.Font.SourceSansBold
 
-local statusLabel = Instance.new("TextLabel", screenGui)
-statusLabel.Size = UDim2.new(0, 300, 0, 50)
-statusLabel.Position = UDim2.new(0.5, -150, 0.85, 0)
-statusLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-statusLabel.BackgroundTransparency = 0.3
-statusLabel.Font = Enum.Font.GothamBold
-statusLabel.TextSize = 18
-statusLabel.Text = "Initializing Underground Mode..."
+-- MOVEMENT ENGINE (The "Anti-Snap" Fix)
+local function moveGhost(targetPos)
+    local char = rt.player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
 
-local function updateStatus(text, color)
-    statusLabel.Text = text
-    if color then statusLabel.TextColor3 = color end
-end
+    local startPos = root.Position
+    local goalPos = targetPos - Vector3.new(0, rt.depth, 0)
+    local dist = (startPos - goalPos).Magnitude
+    local duration = dist / rt.walkspeed
+    local startTick = tick()
 
--- HELPER FUNCTIONS --
-function rt:Character()
-    return self.player.Character or self.player.CharacterAdded:Wait()
-end
+    -- ANCHOR: Stops the physics engine from fighting the script
+    root.Anchored = true 
 
-function rt:Map()
-    for _, v in workspace:GetDescendants() do
-        if v:IsA("Model") and v.Name == "Base" then
-            return v.Parent
-        end
+    while tick() - startTick < duration do
+        local alpha = (tick() - startTick) / duration
+        local currentFramePos = startPos:Lerp(goalPos, alpha)
+        
+        -- Apply position and laying flat rotation
+        char:PivotTo(CFrame.new(currentFramePos) * CFrame.Angles(math.rad(90), 0, 0))
+        
+        -- Heartbeat is safer for Android CPU than task.wait()
+        rt.RunService.Heartbeat:Wait()
     end
-    return nil
-end
-
-local function isCoinTouched(coin)
-    return rt.touchedCoins[coin]
-end
-
-local function markCoinAsTouched(coin)
-    rt.touchedCoins[coin] = true
-    local node = rt.octree:FindFirstNode(coin)
-    if node then rt.octree:RemoveNode(node) end
-end
-
-local function isValidCurrency(obj)
-    for _, name in ipairs(rt.TargetNames) do
-        if obj.Name == name then return true end
-    end
-    return false
-end
-
-local function populateOctree()
-    rt.octree:ClearAllNodes()
-    rt.coinContainer = rt:Map():FindFirstChild("CoinContainer")
-    if not rt.coinContainer then return end
-    for _, descendant in pairs(rt.coinContainer:GetDescendants()) do
-        if descendant:IsA("TouchTransmitter") then
-            local parentCoin = descendant.Parent
-            if isValidCurrency(parentCoin) and not isCoinTouched(parentCoin) then 
-                rt.octree:CreateNode(parentCoin.Position, parentCoin)
-            end
-        end
-    end
-end
-
--- NEW: UNDERGROUND LERP FUNCTION --
-local function moveToPositionSlowly(targetPosition, duration)
-    local char = rt:Character()
-    local startTime = tick()
-    local startPos = char:GetPivot().Position
     
-    -- This rotation makes the character lay flat
-    local horizontalRotation = CFrame.Angles(math.rad(90), 0, 0)
-
-    while tick() - startTime < duration do
-        local alpha = (tick() - startTime) / duration
-        local currentPos = startPos:Lerp(targetPosition, alpha)
-        
-        -- Apply the underground offset and the rotation
-        local finalCFrame = CFrame.new(currentPos - Vector3.new(0, rt.undergroundDepth, 0)) * horizontalRotation
-        
-        char:PivotTo(finalCFrame)
-        task.wait()
-    end
-    -- Final snap to position
-    char:PivotTo(CFrame.new(targetPosition - Vector3.new(0, rt.undergroundDepth, 0)) * horizontalRotation)
+    char:PivotTo(CFrame.new(goalPos) * CFrame.Angles(math.rad(90), 0, 0))
 end
 
--- MAIN LOOP --
-local function collectCoins()
-    local sessionCoins = 0 
+-- MAIN LITE LOOP
+local function startFarm()
+    local sessionTotal = 0
     
     while true do
-        local map = rt:Map()
-        if not map then
-            updateStatus("Waiting for Map...", Color3.fromRGB(255, 150, 0))
-            task.wait(2)
-            continue
-        end
+        local char = rt.player.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local root = char and char:FindFirstChild("HumanoidRootPart")
 
-        rt.coinContainer = map:FindFirstChild("CoinContainer")
-        if not rt.coinContainer then
-            updateStatus("Searching for CoinContainer...", Color3.fromRGB(255, 150, 0))
-            task.wait(2)
-            continue
-        end
+        if not hum or not root then task.wait(1) continue end
+
+        -- Fast Bag Check
+        local gui = rt.player.PlayerGui:FindFirstChild("MainGUI")
+        local fullIcon = gui and gui:FindFirstChild("FullBagIcon", true)
         
-        populateOctree()
-
-        local char = rt:Character()
-        local humanoid = char:WaitForChild("Humanoid", 5)
-        local rootPart = char:WaitForChild("HumanoidRootPart", 5)
-
-        if not humanoid or not rootPart then 
-            updateStatus("Waiting for Character...", Color3.fromRGB(255, 255, 255))
-            task.wait(1) 
-            continue 
-        end
-
-        -- Check Bag Status
-        local bagContainer = rt.player.PlayerGui:WaitForChild("MainGUI"):WaitForChild("Game").CoinBags.Container
-        local tokenUI = bagContainer:FindFirstChild("SnowToken") or bagContainer:FindFirstChild("Coin")
-
-        if tokenUI and tokenUI.FullBagIcon.Visible then
-            updateStatus("Bag Full! Resetting...", Color3.fromRGB(255, 50, 50))
-            humanoid.Health = 0
+        if fullIcon and fullIcon.Visible then
+            label.Text = "Bag Full! Resetting..."
+            root.Anchored = false -- Must unanchor to die
+            hum.Health = 0
             rt.player.CharacterAdded:Wait()
-            task.wait(4)
-            continue 
+            task.wait(5)
+            continue
         end
 
-        -- Find Nearest Coin
-        local nearestNode = rt.octree:GetNearest(rootPart.Position, rt.radius, 1)[1]
-        if nearestNode then
-            local closestCoin = nearestNode.Object
-            if not isCoinTouched(closestCoin) then
-                updateStatus("Underground Farm (" .. sessionCoins .. ")", Color3.fromRGB(100, 255, 255))
-                
-                local dist = (rootPart.Position - closestCoin.Position).Magnitude
-                moveToPositionSlowly(closestCoin.Position, dist / rt.walkspeed)
-                markCoinAsTouched(closestCoin)
-                
-                sessionCoins = sessionCoins + 1
-                task.wait(0.1)
+        -- Refresh Octree only when standing still to save CPU
+        local map = workspace:FindFirstChild("Base", true)
+        local container = map and map.Parent:FindFirstChild("CoinContainer")
+        if container then
+            rt.octree:ClearAllNodes()
+            for _, v in ipairs(container:GetChildren()) do
+                if rt.TargetNames[v.Name] and not rt.touchedCoins[v] then
+                    rt.octree:CreateNode(v.Position, v)
+                end
             end
+        end
+
+        local nearest = rt.octree:GetNearest(root.Position, rt.radius, 1)[1]
+        if nearest then
+            label.Text = "Farming: " .. sessionTotal
+            moveGhost(nearest.Object.Position)
+            
+            rt.touchedCoins[nearest.Object] = true
+            rt.octree:RemoveNode(nearest)
+            sessionTotal = sessionTotal + 1
         else
-            updateStatus("Scanning for Coins...", Color3.fromRGB(200, 200, 255))
-            task.wait(1)
+            label.Text = "Scanning for coins..."
+            task.wait(2)
         end
     end
 end
 
-task.spawn(collectCoins)
+task.spawn(startFarm)
