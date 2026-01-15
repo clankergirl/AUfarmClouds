@@ -7,7 +7,7 @@ local rt = {
     octree = Octree.new(),
     touchedCoins = {},
     TargetNames = {Coin_Server = true, SnowToken = true, Coin = true},
-    walkspeed = 28, 
+    walkspeed = 26, 
     radius = 300,
     depth = 3
 }
