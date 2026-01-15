@@ -1,9 +1,8 @@
--- V5.4 DYNAMIC HEIGHT: Smooth Pathing + Anti-Fling
+-- V5.8 SIMPLE-HOP: No Web Requests, No API, Pure Roblox Teleport
 local Octree = loadstring(game:HttpGet("https://raw.githubusercontent.com/Sleitnick/rbxts-octo-tree/main/src/init.lua", true))()
 local rt = {
     Players = game:GetService("Players"),
     RunService = game:GetService("RunService"),
-    HttpService = game:GetService("HttpService"),
     TeleportService = game:GetService("TeleportService"),
     VirtualUser = game:GetService("VirtualUser"),
     octree = Octree.new(),
@@ -33,87 +32,51 @@ label.TextStrokeTransparency = 0
 label.TextStrokeColor3 = Color3.new(0,0,0)
 label.Font = Enum.Font.GothamBold
 label.TextSize = 22
-label.Text = "Dynamic Height Farm Active"
+label.Text = "Clankerfarm"
 
 local function updateStatus(text, color)
     label.Text = text
     label.TextColor3 = color or Color3.new(1, 1, 1)
 end
 
--- SERVER HOP (Min 6 Players)
+-- NEW SIMPLIFIED SERVER HOP --
 local function serverHop()
-    updateStatus("STALL: Hopping...", Color3.fromRGB(255, 50, 50))
-    local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100"
-    local success, raw = pcall(function() return game:HttpGet(url) end)
-    if success then
-        local decoded = rt.HttpService:JSONDecode(raw)
-        local possibleServers = {}
-        for _, s in ipairs(decoded.data) do
-            if s.id ~= game.JobId and s.playing < s.maxPlayers and s.playing >= 6 then
-                table.insert(possibleServers, s.id)
-            end
-        end
-        if #possibleServers > 0 then
-            rt.TeleportService:TeleportToPlaceInstance(game.PlaceId, possibleServers[math.random(1, #possibleServers)])
-        end
-    end
+    updateStatus("STALL DETECTED: Hopping...", Color3.fromRGB(255, 50, 50))
+    task.wait(2)
+    -- Native Roblox Teleport: Joins a random public server automatically
+    rt.TeleportService:Teleport(game.PlaceId, rt.player)
 end
 
--- ANTI-FLING (Adaptive Velocity)
-local function applyAntiFling(char)
-    local root = char:WaitForChild("HumanoidRootPart", 5)
-    if not root then return end
-    for _, p in ipairs(char:GetDescendants()) do
-        if p:IsA("BasePart") then p.CanCollide = false end
-    end
-    rt.RunService.Heartbeat:Connect(function()
-        -- Only kills velocity if it is physically impossible for our walkspeed (25)
-        if root.Velocity.Magnitude > 60 or root.RotVelocity.Magnitude > 60 then
-            root.Velocity = Vector3.zero
-            root.RotVelocity = Vector3.zero
-        end
-    end)
-end
-rt.player.CharacterAdded:Connect(applyAntiFling)
-if rt.player.Character then applyAntiFling(rt.player.Character) end
-
--- ANTI-AFK
+-- ANTI-AFK --
 rt.player.Idled:Connect(function()
     rt.VirtualUser:CaptureController()
     rt.VirtualUser:ClickButton2(Vector2.new())
 end)
 
--- MOVEMENT: Linear Pathing with Dynamic Y
+-- MOVEMENT ENGINE --
 local function moveAndValidate(targetCoin)
     local char = rt.player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root or not targetCoin or not targetCoin.Parent then return "CANCELLED" end
 
     local startPos = root.Position
-    -- This calculates a point 3.2 studs below the SPECIFIC coin position
     local targetPos = targetCoin.Position
     local ghostTarget = targetPos - Vector3.new(0, rt.depth, 0)
-    
     local dist = (startPos - ghostTarget).Magnitude
     local duration = dist / rt.walkspeed
     local startTick = tick()
     local horizontalRotation = CFrame.Angles(math.rad(90), 0, 0)
 
     while tick() - startTick < duration do
-        -- If coin vanishes mid-flight, stop immediately
         if not targetCoin or not targetCoin.Parent then return "CANCELLED" end
-        
         local alpha = (tick() - startTick) / duration
-        -- LERP handles the X, Y, and Z changes simultaneously
-        local currentPos = startPos:Lerp(ghostTarget, alpha)
-        
-        char:PivotTo(CFrame.new(currentPos) * horizontalRotation)
+        char:PivotTo(CFrame.new(startPos:Lerp(ghostTarget, alpha)) * horizontalRotation)
         rt.RunService.Heartbeat:Wait()
     end
     return "SUCCESS"
 end
 
--- BAG CHECK
+-- BAG CHECK --
 local function isBagFull()
     local mainGui = rt.player.PlayerGui:FindFirstChild("MainGUI")
     local gameUI = mainGui and mainGui:FindFirstChild("Game")
@@ -126,11 +89,11 @@ local function isBagFull()
     return false
 end
 
--- MAIN LOOP
+-- MAIN LOOP --
 local function start()
     local sessionCoins = 0
     while true do
-        task.wait(0.1)
+        task.wait(1) -- Heavy stall check once per second
         local char = rt.player.Character
         local hum = char and char:FindFirstChild("Humanoid")
         local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -164,10 +127,16 @@ local function start()
             end
         end
 
+        -- STALL MONITOR --
         if container == nil or #container:GetChildren() == 0 then
             stallTime = stallTime + 1
-            if stallTime >= 600 then serverHop() break end
-        else
+            if stallTime >= 600 then -- 10 Minutes
+                serverHop()
+                break 
+            end
+        end
+
+        if container then
             rt.octree:ClearAllNodes()
             for _, v in ipairs(container:GetDescendants()) do
                 if rt.TargetNames[v.Name] and v:IsA("BasePart") and not rt.touchedCoins[v] then
@@ -185,8 +154,7 @@ local function start()
                 sessionCoins = sessionCoins + 1
             end
         else
-            updateStatus("Searching... Stall: " .. math.floor(stallTime) .. "s", Color3.fromRGB(150, 200, 255))
-            task.wait(0.5)
+            updateStatus("Scanning... Stall: " .. math.floor(stallTime) .. "s", Color3.fromRGB(150, 200, 255))
         end
     end
 end
