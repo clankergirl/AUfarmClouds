@@ -6,13 +6,14 @@ local rt = {
     octree = Octree.new(),
     touchedCoins = {},
     TargetNames = {Coin_Server = true, SnowToken = true, Coin = true},
-    walkspeed = 24,
+    walkspeed = 22,
     radius = 300,
     depth = 0
 }
 rt.player = rt.Players.LocalPlayer
 local lastContainer = nil 
 
+-- UI SETUP
 local screenGui = rt.player.PlayerGui:FindFirstChild("ClassicFarmUI")
 if screenGui then screenGui:Destroy() end
 screenGui = Instance.new("ScreenGui", rt.player.PlayerGui)
@@ -30,12 +31,14 @@ label.Font = Enum.Font.GothamBold
 label.TextSize = 24
 label.Text = "Surface Snatcher Active"
 
+-- ANTI-AFK
 rt.player.Idled:Connect(function()
     rt.VirtualUser:CaptureController()
     rt.VirtualUser:ClickButton2(Vector2.new())
     task.wait(1)
 end)
 
+-- UPRIGHT MOVEMENT ENGINE
 local function moveAndValidate(targetCoin)
     local char = rt.player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -49,22 +52,25 @@ local function moveAndValidate(targetCoin)
     local dist = (startPos - ghostTarget).Magnitude
     local duration = dist / rt.walkspeed
     local startTick = tick()
-    local horizontalRotation = CFrame.Angles(math.rad(90), 0, 0)
 
     local alpha = 0
-    while alpha < 0.99 do -- Momentum threshold
+    while alpha < 0.99 do -- 0.99 Momentum Threshold
         if not targetCoin or not targetCoin.Parent then
             return "CANCELLED" 
         end
         
         alpha = (tick() - startTick) / duration
-        char:PivotTo(CFrame.new(startPos:Lerp(ghostTarget, alpha)) * horizontalRotation)
+        local lerpPos = startPos:Lerp(ghostTarget, alpha)
+        
+        -- Upright Positioning (No rotation applied)
+        char:PivotTo(CFrame.new(lerpPos)) 
         rt.RunService.Heartbeat:Wait()
     end
     
     return "SUCCESS"
 end
 
+-- BAG CHECK
 local function isBagFull()
     local mainGui = rt.player.PlayerGui:FindFirstChild("MainGUI")
     local gameUI = mainGui and mainGui:FindFirstChild("Game")
@@ -79,6 +85,7 @@ local function isBagFull()
     return false
 end
 
+-- MAIN LOOP
 local function start()
     local sessionCoins = 0
     while true do
