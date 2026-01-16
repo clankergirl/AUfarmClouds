@@ -29,7 +29,7 @@ label.TextStrokeTransparency = 0
 label.TextStrokeColor3 = Color3.new(0,0,0)
 label.Font = Enum.Font.GothamBold
 label.TextSize = 24
-label.Text = "Surface Snatcher Active"
+label.Text = "Confirmation Snatcher Active"
 
 -- ANTI-AFK
 rt.player.Idled:Connect(function()
@@ -38,7 +38,19 @@ rt.player.Idled:Connect(function()
     task.wait(1)
 end)
 
--- UPRIGHT MOVEMENT ENGINE
+-- CONFIRMATION LOGIC: Checks if coin is actually gone from workspace
+local function confirmCollection(targetCoin)
+    local timeout = tick() + 0.5 -- Max wait time for confirmation
+    while tick() < timeout do
+        if not targetCoin or not targetCoin.Parent then
+            return true -- Confirmed: Coin is gone
+        end
+        task.wait()
+    end
+    return false -- Failed to confirm
+end
+
+-- MOVEMENT ENGINE
 local function moveAndValidate(targetCoin)
     local char = rt.player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -54,7 +66,7 @@ local function moveAndValidate(targetCoin)
     local startTick = tick()
 
     local alpha = 0
-    while alpha < 0.99 do -- 0.99 Momentum Threshold
+    while alpha < 0.99 do 
         if not targetCoin or not targetCoin.Parent then
             return "CANCELLED" 
         end
@@ -62,12 +74,18 @@ local function moveAndValidate(targetCoin)
         alpha = (tick() - startTick) / duration
         local lerpPos = startPos:Lerp(ghostTarget, alpha)
         
-        -- Upright Positioning (No rotation applied)
         char:PivotTo(CFrame.new(lerpPos)) 
         rt.RunService.Heartbeat:Wait()
     end
     
-    return "SUCCESS"
+    -- STAY UNTIL CONFIRMED: Similar to bag check logic
+    local collected = confirmCollection(targetCoin)
+    
+    if collected then
+        return "SUCCESS"
+    else
+        return "STUCK"
+    end
 end
 
 -- BAG CHECK
@@ -97,6 +115,7 @@ local function start()
         if not root or not hum then continue end
 
         if isBagFull() then
+            label.Text = "BAG FULL! RESETTING..."
             hum.Health = 0
             rt.player.CharacterRemoving:Wait()
             rt.player.CharacterAdded:Wait()
@@ -128,9 +147,15 @@ local function start()
         if nearest then
             local coin = nearest.Object
             label.Text = "Snatching: " .. sessionCoins
-            if moveAndValidate(coin) == "SUCCESS" then
+            
+            local result = moveAndValidate(coin)
+            
+            if result == "SUCCESS" then
                 rt.touchedCoins[coin] = true
                 sessionCoins = sessionCoins + 1
+            elseif result == "STUCK" then
+                -- If it didn't disappear, mark it so we don't get stuck in a loop
+                rt.touchedCoins[coin] = true
             end
         end
     end
