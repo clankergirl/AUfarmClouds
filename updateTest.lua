@@ -13,7 +13,7 @@ rt.RoundInProgress = false
 rt.Players = game.Players
 rt.player = game.Players.LocalPlayer
 
-rt.coinContainer = SnowToken
+rt.coinContainer = "SnowToken"
 rt.radius = 200 :: number -- Radius to search for coins
 rt.walkspeed = 30 :: number -- speed at which you will go to a coin measured in walkspeed
 rt.touchedCoins = {} -- Table to track touched coins
