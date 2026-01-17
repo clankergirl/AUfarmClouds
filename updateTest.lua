@@ -19,18 +19,51 @@ rt.Removing = nil :: RBXScriptConnection
 
 rt.UserDied = nil :: RBXScriptConnection
 
-local State = {
-    Action = "Action",
-    StandStillWait = "StandStillWait",
-    WaitingForRound = "WaitingForRound",
-    WaitingForRoundEnd = "WaitingForRoundEnd",
-    RespawnState = "RespawnState"
-}
+-- Replace your current ActionState and WaitingForRound with these versions:
 
-local CurrentState = State.WaitingForRound
-local LastPosition = nil
-local RoundInProgress = function()
-    return rt.RoundInProgress
+local function ActionState()
+    LastPosition = nil
+    
+    -- 1. Check if we can find the map
+    local map = rt:Map()
+    if not map then 
+        warn("Autofarm: Map not found yet.")
+        task.wait(1)
+        return -- This will go back to the loop and try again
+    end
+    
+    -- 2. Check if coins exist
+    rt.coinContainer = map:FindFirstChild("CoinContainer")
+    if not rt.coinContainer then
+        warn("Autofarm: CoinContainer not found in " .. map.Name)
+        task.wait(1)
+        return
+    end
+
+    rt:Message("Info", "Starting Farm...", 2)
+    print("Autofarm: Successfully located coins. Beginning collection.")
+    CollectCoins()
+
+    -- After CollectCoins finishes (Bag full or Round over)
+    if BagIsFull or not RoundInProgress() then
+        rt:Message("Info", "Returning to Waiting State...", 2)
+        BagIsFull, Working = false, false
+        ChangeState(State.WaitingForRoundEnd)
+    end
+end
+
+local function WaitingForRound()
+    if not Working then
+        rt:Message("Info", "Waiting for round...", 2)
+        Working = true 
+    end
+
+    repeat 
+        task.wait(1) 
+    until rt:CheckIfPlayerIsInARound() and rt:Map() ~= nil
+    
+    Working = false
+    ChangeState(State.Action)
 end
 local BagIsFull = false
 
